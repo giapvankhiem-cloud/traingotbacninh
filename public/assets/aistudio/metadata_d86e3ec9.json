@@ -1,6 +1,0 @@
-{
-  "name": "Trái ngọt Bắc Ninh",
-  "description": "Nền tảng nông nghiệp thông minh: tái tạo 3D khu vực trồng trọt, sàn nông sản trực tiếp, cộng đồng nhà nông, trợ lý canh tác AI và chẩn đoán bệnh cây trồng.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
