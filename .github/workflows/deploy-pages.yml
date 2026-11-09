@@ -1,0 +1,106 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['.github/workflows/**']
+  workflow_dispatch:
+    inputs:
+      import_source:
+        description: Import the verified initial source archive into main
+        type: boolean
+        default: false
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  import-source:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.import_source }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.import.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import verified release archive
+        id: import
+        run: |
+          set -euo pipefail
+          test ! -e package.json
+          archive="$RUNNER_TEMP/website-source.zip"
+          staging="$RUNNER_TEMP/website-source"
+          curl --fail --silent --show-error --location --retry 3 'https://github.com/giapvankhiem-cloud/traingotbacninh/releases/download/source-transfer-2026-11-09/website-source.zip' -o "$archive"
+          echo "44e88046f2faaf9757e424deaef60205a74536913218d3893dab2b3b77597de6  $archive" | sha256sum --check --strict
+          mkdir "$staging"
+          unzip -q "$archive" -d "$staging"
+          test -f "$staging/package.json"
+          test ! -e "$staging/.github"
+          test ! -e "$staging/.git"
+          cp -a "$staging/." .
+          git add -A
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Publish Trái ngọt Bắc Ninh project source'
+          git push origin HEAD:refs/heads/main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: import-source
+    if: ${{ !cancelled() && (needs.import-source.result == 'success' || needs.import-source.result == 'skipped') }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ needs.import-source.outputs.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify source
+        run: |
+          npm run lint
+          npm test
+
+      - name: Build site
+        # These defaults are public web client identifiers, not server credentials.
+        env:
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY || 'AIzaSyDNwmQfuW6hupYlwcYHjTFAzA4wv6O23F4' }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN || 'trai-ngot-bac-ninh.firebaseapp.com' }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID || 'trai-ngot-bac-ninh' }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID || '1:413304087931:web:c89b4b705b2b2667cfc9de' }}
+          VITE_PUBLIC_SITE_URL: ${{ vars.VITE_PUBLIC_SITE_URL || 'https://trai-ngot-bac-ninh.web.app/' }}
+          VITE_AI_PROVIDER: firebase
+          VITE_AI_MODEL: ${{ vars.VITE_AI_MODEL || 'gemini-3.5-flash-lite' }}
+          VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ vars.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY || '6LcE-QsuAAAAAF1Cji6dx_Z46VOzg8D9Lzbk8gOm' }}
+        run: |
+          node scripts/check-firebase-env.mjs
+          npm run build
+          cp dist/index.html dist/404.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
