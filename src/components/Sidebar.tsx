@@ -6,11 +6,13 @@ import {
   CalendarDays,
   ShoppingBag,
   Users,
+  Phone,
   X,
 } from 'lucide-react';
 import { ActiveTab } from '../types/agriculture';
 import { Brand } from './Brand';
 import { FruitLogo } from './FruitLogo';
+import { ContactLink } from './ContactLink';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -124,6 +126,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </button>
               );
             })}
+            <ContactLink onNavigate={onClose} className="sidebar-nav-item flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium">
+              <span className="sidebar-nav-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
+                <Phone className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span>Liên hệ</span>
+            </ContactLink>
           </nav>
         </div>
 

@@ -189,13 +189,18 @@
 .footer-top p:not(.eyebrow) { color: #fff; font-size: var(--type-body); line-height: 1.8; margin-bottom: 24px; }
 .button-light { background: var(--brand-soft); color: var(--accent); }
 .button-light:hover { background: white; }
+.footer-contact { scroll-margin-top: 6rem; }
+.footer-contact-list { display: flex; flex-wrap: wrap; gap: 12px 32px; }
+.footer-contact-list strong { color: #fff; }
+.footer-contact-list li > div { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; }
+.footer-contact-list a { display: inline-flex; align-items: center; gap: 5px; min-height: 24px; color: #fff; text-decoration: underline; text-underline-offset: 4px; }
 .footer-bottom { display: grid; grid-template-columns: .85fr 1.15fr; gap: 24px 40px; padding: 32px 0; align-items: center; }
 .footer-bottom p { color: #fff; font-size: var(--type-small); line-height: 1.8; }
 .footer-bottom nav { display: flex; flex-wrap: wrap; grid-column: 1/-1; gap: 16px 24px; font-size: var(--type-small); }
 .footer-bottom nav a { white-space: nowrap; }
 .site-footer a:focus-visible, .site-footer button:focus-visible { outline-color: #fff; }
 .footer-bottom nav a:hover { text-decoration: underline; }
-.footer-legal { border-top: 1px solid #ffffff40; padding: 20px 0; display: flex; justify-content: space-between; gap: 20px; color: var(--color-inverse-muted); font-size: var(--type-caption); }
+.footer-legal { border-top: 1px solid #ffffff40; padding: 20px 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; color: var(--color-inverse-muted); font-size: var(--type-caption); }
 
 @media(min-width:1300px) {
   .produce-grid { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 20px; }
@@ -275,7 +280,7 @@
   .footer-top { grid-template-columns: 1fr; gap: 24px; padding: 40px 0 32px; }
   .footer-bottom { grid-template-columns: 1fr; gap: 24px; padding: 32px 0; }
   .footer-bottom nav { grid-column: auto; }
-  .footer-legal { flex-direction: column; gap: 8px; }
+  .footer-legal { flex-direction: column; align-items: flex-start; }
 }
 @media(max-width:540px) {
   .produce-grid { grid-template-columns: 1fr; gap: 24px; }

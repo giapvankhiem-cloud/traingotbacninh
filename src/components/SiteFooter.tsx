@@ -1,5 +1,6 @@
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Phone } from 'lucide-react';
 import { Brand } from './Brand';
+import { adminContacts } from '../data/adminContacts';
 import { publicAssetUrl } from '../utils/assetUrl';
 import { SITE_URL } from '../utils/seo';
 export function SiteFooter({ onJoin }: { onJoin?: () => void }) {
@@ -31,7 +32,20 @@ export function SiteFooter({ onJoin }: { onJoin?: () => void }) {
         </div>
         <div className="footer-legal">
           <span>© {new Date().getFullYear()} Trái ngọt Bắc Ninh</span>
-          <span>Trân trọng mùa màng. Trân trọng người trồng.</span>
+          <section id="lien-he" tabIndex={-1} aria-labelledby="contact-heading" className="footer-contact">
+            <h2 id="contact-heading" className="sr-only">Liên hệ nhóm quản trị</h2>
+            <ul className="footer-contact-list">
+              {adminContacts.map(({ name, role, phone }) => (
+                <li key={`${role}-${phone}`}>
+                  <strong>{role}</strong>
+                  <div>
+                    {name && <span>{name}</span>}
+                    <a href={`tel:${phone.replace(/[^+\d]/g, '')}`}><Phone size={14} aria-hidden="true" />{phone}</a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
         </div>
       </div>
     </footer>
