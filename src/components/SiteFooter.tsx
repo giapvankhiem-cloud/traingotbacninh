@@ -1,6 +1,7 @@
 import { ArrowUpRight } from 'lucide-react';
 import { Brand } from './Brand';
 import { publicAssetUrl } from '../utils/assetUrl';
+import { SITE_URL } from '../utils/seo';
 export function SiteFooter({ onJoin }: { onJoin?: () => void }) {
   return (
     <footer id="site-footer" className="site-footer">
@@ -25,7 +26,7 @@ export function SiteFooter({ onJoin }: { onJoin?: () => void }) {
           <nav aria-label="Liên kết cuối trang">
             <a href={publicAssetUrl('#sap-nong-san')}>Sạp trái cây</a>
             <a href={publicAssetUrl('#hanh-trinh')}>Truy xuất nguồn gốc</a>
-            <a href={publicAssetUrl('sitemap.xml')}>Sơ đồ website</a>
+            <a href={new URL('sitemap.xml', import.meta.env?.VITE_PUBLIC_SITE_URL || SITE_URL).href}>Sơ đồ website</a>
           </nav>
         </div>
         <div className="footer-legal">
