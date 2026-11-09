@@ -3,51 +3,14 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [main]
-    paths-ignore: ['.github/workflows/**']
   workflow_dispatch:
-    inputs:
-      import_source:
-        description: Import the verified initial source archive into main
-        type: boolean
-        default: false
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  import-source:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.import_source }}
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    outputs:
-      sha: ${{ steps.import.outputs.sha }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Import verified release archive
-        id: import
-        run: |
-          set -euo pipefail
-          test ! -e package.json
-          archive="$RUNNER_TEMP/website-source.zip"
-          staging="$RUNNER_TEMP/website-source"
-          curl --fail --silent --show-error --location --retry 3 'https://github.com/giapvankhiem-cloud/traingotbacninh/releases/download/source-transfer-2026-11-09/website-source.zip' -o "$archive"
-          echo "44e88046f2faaf9757e424deaef60205a74536913218d3893dab2b3b77597de6  $archive" | sha256sum --check --strict
-          mkdir "$staging"
-          unzip -q "$archive" -d "$staging"
-          test -f "$staging/package.json"
-          test ! -e "$staging/.github"
-          test ! -e "$staging/.git"
-          cp -a "$staging/." .
-          git add -A
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Publish Trái ngọt Bắc Ninh project source'
-          git push origin HEAD:refs/heads/main
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
   deploy:
-    needs: import-source
-    if: ${{ !cancelled() && (needs.import-source.result == 'success' || needs.import-source.result == 'skipped') }}
     permissions:
       contents: read
       pages: write
@@ -61,7 +24,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: ${{ needs.import-source.outputs.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
