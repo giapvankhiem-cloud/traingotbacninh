@@ -1,0 +1,500 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function account() { return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
+    function restrictedAccount(uid) {
+      let path = /databases/$(database)/documents/farmerAccountStates/$(uid);
+      return exists(path) && get(path).data.status in ['suspended','deleted'];
+    }
+    function restrictedAccountAfter(uid) {
+      let path = /databases/$(database)/documents/farmerAccountStates/$(uid);
+      return existsAfter(path) && getAfter(path).data.status in ['suspended','deleted'];
+    }
+    function farmer() { return account() && request.auth.token.email_verified == true && !restrictedAccount(request.auth.uid); }
+    function admin() { return farmer() && request.auth.token.get('admin', false) == true; }
+    function approvedFarmer() {
+      return farmer() && get(/databases/$(database)/documents/farmerApplications/$(request.auth.uid)).data.status == 'approved';
+    }
+    function short(value, max) { return value is string && value.size() <= max; }
+    function validPhone(value, max) {
+      return short(value, max) && value.matches('^([+() -]*[0-9]){8,}[+() -]*$');
+    }
+    match /farmerAccountStates/{uid} {
+      // Only public lifecycle data; reasons and reviewer identity live privately.
+      allow read: if true;
+      allow create, update: if admin() && request.auth.uid != uid
+        && exists(/databases/$(database)/documents/farmerApplications/$(uid))
+        && request.resource.data.keys().hasOnly(['id','status','version','updatedAt','lastActionId'])
+        && request.resource.data.id == uid && request.resource.data.status in ['active','suspended','deleted']
+        && request.resource.data.version is int && request.resource.data.updatedAt is number
+        && request.resource.data.lastActionId.matches('^[A-Za-z0-9]{20}$')
+        && (exists(/databases/$(database)/documents/farmerAccountStates/$(uid))
+          ? request.resource.data.version == resource.data.version + 1
+            && request.resource.data.status != resource.data.status
+            && (resource.data.status != 'deleted' || request.resource.data.status == 'active')
+          : request.resource.data.version == 1 && request.resource.data.status in ['suspended','deleted'])
+        && getAfter(/databases/$(database)/documents/farmerAccountActions/$(request.resource.data.lastActionId)).data.farmerId == uid
+        && getAfter(/databases/$(database)/documents/farmerAccountActions/$(request.resource.data.lastActionId)).data.version == request.resource.data.version
+        && getAfter(/databases/$(database)/documents/farmerAccountActions/$(request.resource.data.lastActionId)).data.reviewerId == request.auth.uid;
+      allow delete: if false;
+    }
+    match /farmerAccountActions/{actionId} {
+      allow get, list: if admin() || (account() && resource.data.farmerId == request.auth.uid);
+      allow create: if admin() && request.resource.data.farmerId != request.auth.uid
+        && request.resource.data.keys().hasOnly(['id','farmerId','previousStatus','status','version','reviewerId','note','createdAt'])
+        && request.resource.data.id == actionId && request.resource.data.reviewerId == request.auth.uid
+        && short(request.resource.data.note, 1000) && request.resource.data.note.size() > 0
+        && request.resource.data.status in ['active','suspended','deleted']
+        && request.resource.data.previousStatus == (exists(/databases/$(database)/documents/farmerAccountStates/$(request.resource.data.farmerId))
+          ? get(/databases/$(database)/documents/farmerAccountStates/$(request.resource.data.farmerId)).data.status : 'active')
+        && getAfter(/databases/$(database)/documents/farmerAccountStates/$(request.resource.data.farmerId)).data.lastActionId == actionId
+        && getAfter(/databases/$(database)/documents/farmerAccountStates/$(request.resource.data.farmerId)).data.version == request.resource.data.version
+        && getAfter(/databases/$(database)/documents/farmerAccountStates/$(request.resource.data.farmerId)).data.status == request.resource.data.status
+        && getAfter(/databases/$(database)/documents/farmerAccountStates/$(request.resource.data.farmerId)).data.updatedAt == request.resource.data.createdAt;
+      allow update, delete: if false;
+    }
+    function validLocation(location) {
+      return location is map && location.lat is number && location.lng is number
+        && location.lat >= -90 && location.lat <= 90 && location.lng >= -180 && location.lng <= 180
+        && (location.address is string && location.address.size() <= 500) && (location.commune is string && location.commune.size() <= 200)
+        && location.altitudeM is number && (location.soilType is string && location.soilType.size() <= 500) && (location.waterSource is string && location.waterSource.size() <= 500);
+    }
+    function certificateDate(value) {
+      let parts = value.split('-');
+      return value.matches('^[1-9][0-9]{3}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && timestamp.date(int(parts[0]), int(parts[1]), int(parts[2])) is timestamp;
+    }
+    function certificateLink(value) {
+      return value.size() <= 1200 && (value == '' || value.matches('^https://[^/@?# :]+(:[0-9]+)?([/?#][^ ]*)?$'));
+    }
+    function validCertificate(data) {
+      return data is map && data.keys().hasOnly(['id','type','title','certificateNumber','issuedBy','issuedDate','expiryDate','scope','verified','standardDetails','ocopStars','documentUrl','documentImage','qrCodeUrl'])
+        && data.id.matches('^[A-Za-z0-9_-]{1,80}$')
+        && data.type in ['VietGAP','GlobalGAP','OCOP','Hữu cơ','An toàn thực phẩm','Khác']
+        && data.title.matches('^.{1,200}$')
+        && data.certificateNumber.matches('^.{1,150}$')
+        && data.issuedBy.matches('^.{1,200}$')
+        && data.scope.matches('(?s)^.{1,1000}$')
+        && data.standardDetails.matches('(?s)^.{0,1000}$') && data.verified == false
+        && certificateDate(data.issuedDate)
+        && (data.expiryDate == '' || (certificateDate(data.expiryDate) && data.expiryDate >= data.issuedDate))
+        && (data.type != 'OCOP' || data.ocopStars in [3,4,5])
+        && (!('ocopStars' in data) || data.ocopStars in [3,4,5])
+        && (!('documentUrl' in data) || certificateLink(data.documentUrl))
+        && (!('qrCodeUrl' in data) || certificateLink(data.qrCodeUrl))
+        && (!('documentImage' in data) || (data.documentImage.size() <= 140000 && (data.documentImage == '' || data.documentImage.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$'))));
+    }
+    function validCertificateIds(items) {
+      return items is list && items.size() <= 6
+        && (items.size() < 1 || items[0].matches('^[A-Za-z0-9_-]{1,80}$'))
+        && (items.size() < 2 || items[1].matches('^[A-Za-z0-9_-]{1,80}$'))
+        && (items.size() < 3 || items[2].matches('^[A-Za-z0-9_-]{1,80}$'))
+        && (items.size() < 4 || items[3].matches('^[A-Za-z0-9_-]{1,80}$'))
+        && (items.size() < 5 || items[4].matches('^[A-Za-z0-9_-]{1,80}$'))
+        && (items.size() < 6 || items[5].matches('^[A-Za-z0-9_-]{1,80}$'));
+    }
+    function validMediaItem(item) {
+      let url = item.url;
+      return item.keys().hasOnly(['type','url','caption']) && item.caption.matches('(?s)^.{0,160}$')
+        && (item.type == 'image' ? url.size() <= 65000 && url.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$')
+          : item.type == 'video' && url.size() <= 1200 && url.matches('^https://((www[.]|m[.])?youtube[.]com/(watch[?]v=[A-Za-z0-9_-]{11}([&#][^ ]*)?|(shorts|embed)/[A-Za-z0-9_-]{11}([?#][^ ]*)?)|youtu[.]be/[A-Za-z0-9_-]{11}([?#][^ ]*)?|[^/@?# :]+(:[0-9]+)?/[^ ]+[.]([mM][pP]4|[wW][eE][bB][mM])([?#][^ ]*)?)$'));
+    }
+    function validMedia(items) {
+      return items is list && items.size() <= 6
+        && (items.size() < 1 || validMediaItem(items[0]))
+        && (items.size() < 2 || validMediaItem(items[1]))
+        && (items.size() < 3 || validMediaItem(items[2]))
+        && (items.size() < 4 || validMediaItem(items[3]))
+        && (items.size() < 5 || validMediaItem(items[4]))
+        && (items.size() < 6 || validMediaItem(items[5]));
+    }
+    function validStoryMedia(value) {
+      return value is string && (value.size() <= 65002 && value.matches('^i:data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$')
+        || value.size() <= 1202 && value.matches('^v:https://((www[.]|m[.])?youtube[.]com/(watch[?]v=[A-Za-z0-9_-]{11}([&#][^ ]*)?|(shorts|embed)/[A-Za-z0-9_-]{11}([?#][^ ]*)?)|youtu[.]be/[A-Za-z0-9_-]{11}([?#][^ ]*)?|[^/@?# :]+(:[0-9]+)?/[^ ]+[.]([mM][pP]4|[wW][eE][bB][mM])([?#][^ ]*)?)$'));
+    }
+    function validStory(story) {
+      let text = story.paragraphs;
+      let media = story.media;
+      let n = text.size();
+      let m = media.size();
+      return story.keys().hasOnly(['paragraphs','media']) && text is list && media is list && n == m + 1
+        && n >= 1 && n <= 7 && m <= 6 && text.join('\n').size() <= 5000
+        && (n < 1 || text[0] is string)
+        && (n < 2 || text[1] is string)
+        && (n < 3 || text[2] is string)
+        && (n < 4 || text[3] is string)
+        && (n < 5 || text[4] is string)
+        && (n < 6 || text[5] is string)
+        && (n < 7 || text[6] is string)
+        && (m < 1 || validStoryMedia(media[0]))
+        && (m < 2 || validStoryMedia(media[1]))
+        && (m < 3 || validStoryMedia(media[2]))
+        && (m < 4 || validStoryMedia(media[3]))
+        && (m < 5 || validStoryMedia(media[4]))
+        && (m < 6 || validStoryMedia(media[5]));
+    }
+    function validFarmer(data, uid) {
+      return data.keys().hasOnly(['id','name','avatar','location','shortLocation','commune','role','cropFocus','areaHa','treeCount','phone','pucCode','certification','farmName','licenseNo','gardenLocation','orchardPhoto','bio','commitment','certificateIds','introductionMedia','introductionContent'])
+        && data.id == uid && (data.name is string && data.name.size() <= 100) && data.name.size() > 0 && (data.avatar is string && data.avatar.size() <= 70000)
+        && (data.location is string && data.location.size() <= 500) && (data.shortLocation is string && data.shortLocation.size() <= 200) && (data.commune is string && data.commune.size() <= 200)
+        && ((!('gardenLocation' in data) && data.phone == '') || validPhone(data.phone, 30))
+        && (data.role is string && data.role.size() <= 200) && (data.cropFocus is string && data.cropFocus.size() <= 500)
+        && (data.pucCode is string && data.pucCode.size() <= 100) && (data.certification is string && data.certification.size() <= 200)
+        && data.areaHa is number && data.areaHa >= 0 && data.areaHa <= 100000
+        && data.treeCount is int && data.treeCount >= 0
+        && (!('gardenLocation' in data) || validLocation(data.gardenLocation))
+        && (!('orchardPhoto' in data) || (data.orchardPhoto is string && data.orchardPhoto.size() <= 150000))
+        && ('introductionContent' in data
+          ? validStory(data.introductionContent) && (!('introductionMedia' in data) || data.introductionMedia == [])
+          : (!('introductionMedia' in data) || validMedia(data.introductionMedia)))
+        && (!('bio' in data) || (data.bio is string && data.bio.size() <= 5000)) && (!('commitment' in data) || (data.commitment is string && data.commitment.size() <= 5000))
+        && (!('certificateIds' in data) || validCertificateIds(data.certificateIds));
+    }
+    match /farmers/{uid} {
+      allow read: if true;
+      allow create, update: if admin() && validFarmer(request.resource.data, uid)
+        && getAfter(/databases/$(database)/documents/farmerApplications/$(uid)).data.status == 'approved'
+        && request.resource.data == getAfter(/databases/$(database)/documents/farmerApplications/$(uid)).data.profile;
+      allow delete: if false;
+      match /certificates/{certificateId} {
+        allow read: if admin() || (signedIn() && request.auth.uid == uid)
+          || certificateId in get(/databases/$(database)/documents/farmers/$(uid)).data.get('certificateIds', []);
+        allow create, update: if admin()
+          && request.resource.data.id == certificateId && validCertificate(request.resource.data)
+          && request.resource.data == getAfter(/databases/$(database)/documents/farmerApplications/$(uid)/certificates/$(certificateId)).data
+          && certificateId in getAfter(/databases/$(database)/documents/farmers/$(uid)).data.certificateIds;
+        allow delete: if admin();
+      }
+      match /tasks/{taskId} {
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow write: if farmer() && request.auth.uid == uid && request.resource.data.keys().hasOnly(['completed']) && request.resource.data.completed is bool;
+      }
+    }
+    function validApplication(data, uid) {
+      return data.keys().hasOnly(['id','email','profile','status','revision','submittedAt','reviewedAt','reviewedBy','reviewNote'])
+        && data.id == uid && (data.email is string && data.email.size() <= 254) && data.email.size() > 0
+        && data.status in ['draft','pending','approved','rejected','suspended']
+        && data.revision is int && data.revision > 0 && data.submittedAt is number
+        && data.reviewedAt is number && (data.reviewedBy is string && data.reviewedBy.size() <= 128) && (data.reviewNote is string && data.reviewNote.size() <= 1000);
+    }
+    function selfSubmission(uid) {
+      let data = request.resource.data;
+      return farmer() && request.auth.uid == uid && data.email == request.auth.token.email
+        && data.status == 'pending' && data.reviewedAt == 0 && data.reviewedBy == '' && data.reviewNote == ''
+        && data.submittedAt > 0 && 'gardenLocation' in data.profile && data.profile.location.size() > 0 && data.profile.cropFocus.size() > 0;
+    }
+    function adminExpertApplication(uid) {
+      let data = request.resource.data;
+      let expertPath = /databases/$(database)/documents/consultationExperts/$(uid);
+      return admin() && request.auth.uid != uid && !exists(expertPath) && existsAfter(expertPath)
+        && data.status == 'draft' && data.submittedAt == 0 && data.reviewedAt == 0 && data.reviewedBy == '' && data.reviewNote == ''
+        && getAfter(expertPath).data.id == uid && getAfter(expertPath).data.name == data.profile.name
+        && getAfter(expertPath).data.status == 'pending' && getAfter(expertPath).data.active == false
+        && getAfter(expertPath).data.internalAccount == true && getAfter(expertPath).data.updatedBy == request.auth.uid;
+    }
+    match /farmerApplications/{uid} {
+      allow get: if admin() || (account() && request.auth.uid == uid);
+      allow list: if admin();
+      allow create: if request.resource.data.revision == 1 && validApplication(request.resource.data, uid) && validFarmer(request.resource.data.profile, uid)
+        && (adminExpertApplication(uid) || selfSubmission(uid) || (account() && request.auth.uid == uid
+          && request.resource.data.email == request.auth.token.email && request.resource.data.status == 'draft'
+          && request.resource.data.reviewedAt == 0 && request.resource.data.reviewedBy == '' && request.resource.data.reviewNote == '' && request.resource.data.submittedAt == 0));
+      allow update: if validApplication(request.resource.data, uid) && (
+        (selfSubmission(uid) && validFarmer(request.resource.data.profile, uid) && resource.data.status != 'suspended' && request.resource.data.revision == resource.data.revision + 1)
+        || (admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','reviewedAt','reviewedBy','reviewNote'])
+          && request.resource.data.reviewedBy == request.auth.uid && request.resource.data.reviewedAt > 0
+          && ((resource.data.status == 'pending' && request.resource.data.status in ['approved','rejected'])
+            || (resource.data.status == 'approved' && request.resource.data.status == 'suspended')
+            || (resource.data.status == 'suspended' && request.resource.data.status == 'rejected'))
+          && (request.resource.data.status == 'approved'
+            ? getAfter(/databases/$(database)/documents/farmers/$(uid)).data == request.resource.data.profile
+            : request.resource.data.reviewNote.size() > 0)
+          && getAfter(/databases/$(database)/documents/farmerApplications/$(uid)/reviews/$(string(resource.data.revision) + '-' + request.resource.data.status)).data.reviewerId == request.auth.uid));
+      allow delete: if false;
+      match /certificates/{certificateId} {
+        allow read: if admin() || (account() && request.auth.uid == uid);
+        function changingSubmission() {
+          let path = /databases/$(database)/documents/farmerApplications/$(uid);
+          return farmer() && request.auth.uid == uid && getAfter(path).data.status == 'pending'
+            && (!exists(path) || (getAfter(path).data.revision == get(path).data.revision + 1 && get(path).data.status != 'suspended'));
+        }
+        allow create, update: if changingSubmission() && validCertificate(request.resource.data)
+          && request.resource.data.id == certificateId
+          && certificateId in getAfter(/databases/$(database)/documents/farmerApplications/$(uid)).data.profile.certificateIds;
+        allow delete: if changingSubmission() && !(certificateId in getAfter(/databases/$(database)/documents/farmerApplications/$(uid)).data.profile.certificateIds);
+      }
+      match /reviews/{reviewId} {
+        allow read: if admin() || (account() && request.auth.uid == uid);
+        allow create: if admin() && request.resource.data.keys().hasOnly(['revision','decision','reviewerId','reviewedAt','note'])
+          && request.resource.data.reviewerId == request.auth.uid && short(request.resource.data.note, 1000)
+          && request.resource.data.decision in ['approved','rejected','suspended']
+          && request.resource.data.revision == getAfter(/databases/$(database)/documents/farmerApplications/$(uid)).data.revision
+          && request.resource.data.decision == getAfter(/databases/$(database)/documents/farmerApplications/$(uid)).data.status
+          && request.resource.data.reviewedAt == getAfter(/databases/$(database)/documents/farmerApplications/$(uid)).data.reviewedAt
+          && reviewId == string(request.resource.data.revision) + '-' + request.resource.data.decision;
+        allow update, delete: if false;
+      }
+    }
+    function validProduct(data, id) {
+      return data.keys().hasOnly(['id','ownerId','name','category','price','unit','origin','farmer','farmerPhone','rating','reviewCount','inStock','image','certifications','harvestSeason','sweetnessBrix','description','featured','vietgapCode','farmerProfile','location','cultivationLog','createdAt','updatedAt','lastOrderId'])
+        && data.id == id && data.ownerId is string && short(data.name, 250) && data.name.size() > 0
+        && data.price is number && data.price > 0 && data.price <= 100000000
+        && data.inStock is int && data.inStock >= 0 && data.inStock <= 10000000
+        && short(data.image, 150000) && short(data.description, 10000) && short(data.unit, 30)
+        && data.category in ['lychee','orange','mandarin','pomelo','apple','longan','guava','grape','other']
+        && data.certifications is list && data.certifications.size() <= 5
+        && data.farmerProfile is map && data.farmerProfile.certificates.size() == 0
+        && validLocation(data.location) && data.cultivationLog is map
+        && data.cultivationLog.watering is list && data.cultivationLog.watering.size() <= 500
+        && data.cultivationLog.fertilizing is list && data.cultivationLog.fertilizing.size() <= 500
+        && data.cultivationLog.pestProtection is list && data.cultivationLog.pestProtection.size() <= 500
+        && (!('general' in data.cultivationLog) || (data.cultivationLog.general is list && data.cultivationLog.general.size() <= 500))
+        && data.createdAt is number && data.updatedAt is number;
+    }
+    function reservesStock(id) {
+      let changed = request.resource.data;
+      let orderPath = /databases/$(database)/documents/orders/$(changed.lastOrderId);
+      let order = getAfter(orderPath).data;
+      return signedIn() && changed.diff(resource.data).affectedKeys().hasOnly(['inStock','lastOrderId','updatedAt'])
+        && !exists(orderPath) && order.buyerId == request.auth.uid && order.productId == id
+        && order.status == 'pending' && changed.inStock == resource.data.inStock - order.quantity && changed.inStock >= 0;
+    }
+    function restoresStock(id) {
+      let changed = request.resource.data;
+      let path = /databases/$(database)/documents/orders/$(changed.lastOrderId);
+      let before = get(path).data;
+      let after = getAfter(path).data;
+      return farmer() && before.sellerId == request.auth.uid && before.productId == id
+        && before.status in ['pending','confirmed','packing'] && after.status == 'cancelled'
+        && changed.diff(resource.data).affectedKeys().hasOnly(['inStock','lastOrderId','updatedAt'])
+        && changed.inStock == resource.data.inStock + before.quantity;
+    }
+    match /products/{id} {
+      allow read: if true;
+      allow create: if approvedFarmer() && request.resource.data.ownerId == request.auth.uid
+        && validProduct(request.resource.data, id)
+        && exists(/databases/$(database)/documents/farmers/$(request.auth.uid));
+      allow update: if (approvedFarmer() && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId && request.resource.data.createdAt == resource.data.createdAt
+        && validProduct(request.resource.data, id)) || reservesStock(id) || restoresStock(id);
+      allow delete: if false;
+    }
+    function validOrder(data, id) {
+      let product = get(/databases/$(database)/documents/products/$(data.productId)).data;
+      let reserved = getAfter(/databases/$(database)/documents/products/$(data.productId)).data;
+      return !restrictedAccount(data.sellerId) && (!account() || !restrictedAccount(request.auth.uid))
+        && data.keys().hasOnly(['id','checkoutId','buyerId','sellerId','productId','productName','unit','unitPrice','quantity','total','buyer','status','createdAt','updatedAt','sellerNote'])
+        && data.id == id && short(data.checkoutId, 100) && data.buyerId == request.auth.uid
+        && data.sellerId == product.ownerId && data.productName == product.name && data.unit == product.unit
+        && data.unitPrice == product.price && data.quantity is int && data.quantity > 0 && data.quantity <= product.inStock
+        && data.total == product.price * data.quantity && data.status == 'pending' && data.sellerNote == ''
+        && data.buyer.keys().hasOnly(['name','phone','address'])
+        && short(data.buyer.name, 100) && data.buyer.name.size() > 0
+        && validPhone(data.buyer.phone, 20)
+        && short(data.buyer.address, 500) && data.buyer.address.size() >= 8
+        && data.createdAt is number && data.updatedAt == data.createdAt
+        && reserved.lastOrderId == id && reserved.inStock == product.inStock - data.quantity;
+    }
+    function validTransition(before, after) {
+      return (before == 'pending' && after in ['confirmed','cancelled'])
+        || (before == 'confirmed' && after in ['packing','cancelled'])
+        || (before == 'packing' && after in ['shipping','cancelled'])
+        || (before == 'shipping' && after == 'completed');
+    }
+    match /orders/{id} {
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/orders/$(id))
+        || resource.data.buyerId == request.auth.uid || resource.data.sellerId == request.auth.uid);
+      allow list: if signedIn() && (resource.data.buyerId == request.auth.uid || resource.data.sellerId == request.auth.uid);
+      allow create: if signedIn() && validOrder(request.resource.data, id);
+      allow update: if farmer() && resource.data.sellerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','sellerNote','updatedAt'])
+        && short(request.resource.data.sellerNote, 500) && request.resource.data.updatedAt is number
+        && validTransition(resource.data.status, request.resource.data.status)
+        && (request.resource.data.status != 'cancelled'
+          || getAfter(/databases/$(database)/documents/products/$(resource.data.productId)).data.inStock
+             == get(/databases/$(database)/documents/products/$(resource.data.productId)).data.inStock + resource.data.quantity);
+      allow delete: if false;
+    }
+    match /posts/{id} {
+      allow read: if true;
+      allow create: if approvedFarmer() && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['id','ownerId','author','content','image','media','createdAt'])
+        && request.resource.data.id == id && short(request.resource.data.content, 5000) && request.resource.data.content.size() > 0
+        && (!('media' in request.resource.data) || validMedia(request.resource.data.media))
+        && short(request.resource.data.image, 150000) && short(request.resource.data.author, 100) && request.resource.data.createdAt is number;
+      allow update: if approvedFarmer() && resource.data.ownerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['content'])
+        && short(request.resource.data.content, 5000) && request.resource.data.content.size() > 0;
+      allow delete: if farmer() && resource.data.ownerId == request.auth.uid;
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if approvedFarmer() && exists(/databases/$(database)/documents/posts/$(id))
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['id','ownerId','author','text','createdAt'])
+          && request.resource.data.id == commentId && short(request.resource.data.author, 100)
+          && short(request.resource.data.text, 1000) && request.resource.data.text.size() > 0 && request.resource.data.createdAt is number;
+        allow update, delete: if false;
+      }
+      match /likes/{uid} {
+        allow read: if true;
+        allow create: if approvedFarmer() && request.auth.uid == uid && exists(/databases/$(database)/documents/posts/$(id))
+          && request.resource.data.keys().hasOnly(['ownerId']) && request.resource.data.ownerId == uid;
+        allow delete: if farmer() && request.auth.uid == uid;
+        allow update: if false;
+      }
+    }
+    function activeExpert(uid) {
+      let path = /databases/$(database)/documents/consultationExperts/$(uid);
+      return exists(path) && get(path).data.active == true && get(path).data.status == 'active' && !restrictedAccount(uid);
+    }
+    function expertActor() {
+      return account() && activeExpert(request.auth.uid) && (request.auth.token.email_verified == true
+        || get(/databases/$(database)/documents/consultationExperts/$(request.auth.uid)).data.internalAccount == true);
+    }
+    function consultationReader(data) {
+      return account() && (data.farmerId == request.auth.uid || admin()
+        || (expertActor() && data.expertId == request.auth.uid));
+    }
+    function consultationSender(parent, message) {
+      return (farmer() || expertActor()) && message.senderId == request.auth.uid && (
+        (parent.farmerId == request.auth.uid && message.senderRole == 'farmer' && message.senderName == parent.farmerName)
+        || (parent.farmerId != request.auth.uid && admin() && message.senderRole == 'admin' && message.senderName == 'Ban điều phối')
+        || (parent.farmerId != request.auth.uid && parent.expertId == request.auth.uid && activeExpert(request.auth.uid)
+          && message.senderRole == 'expert' && message.senderName == get(/databases/$(database)/documents/consultationExperts/$(request.auth.uid)).data.name));
+    }
+    function validConsultation(data, id) {
+      return data.keys().hasOnly(['id','farmerId','farmerName','subject','question','crop','expertId','expertName','status','revision','messageCount','lastMessage','lastMessageId','lastSenderRole','createdAt','updatedAt'])
+        && data.id == id && id.matches('^[A-Za-z0-9_-]{20,100}$')
+        && short(data.farmerId,128) && short(data.farmerName,100) && data.farmerName.size() > 0
+        && short(data.subject,200) && data.subject.size() >= 3 && short(data.question,5000) && data.question.size() >= 10
+        && short(data.crop,100) && data.crop.size() > 0 && short(data.expertId,128) && short(data.expertName,100)
+        && data.status in ['waiting','in_progress','closed'] && data.revision is int && data.revision > 0
+        && data.messageCount is int && data.messageCount > 0 && data.messageCount <= 2000
+        && short(data.lastMessage,5000) && data.lastMessage.size() > 0
+        && data.lastMessageId.matches('^(initial|[A-Za-z0-9]{20})$') && data.lastSenderRole in ['farmer','expert','admin']
+        && data.createdAt is number && data.updatedAt is number;
+    }
+    function validConsultationAssignee(data) {
+      return data.expertId != '' && data.expertId != data.farmerId
+        && activeExpert(data.expertId) && data.expertName == get(/databases/$(database)/documents/consultationExperts/$(data.expertId)).data.name;
+    }
+    function expertTextList(items, max) {
+      let count = items.size();
+      let segment = '[^\\x1f]{1,' + string(max) + '}';
+      // Exact segment count prevents a value containing the separator from spoofing item bounds.
+      return items is list && count <= 12
+        && (count < 1 || items[0] is string)
+        && (count < 2 || items[1] is string)
+        && (count < 3 || items[2] is string)
+        && (count < 4 || items[3] is string)
+        && (count < 5 || items[4] is string)
+        && (count < 6 || items[5] is string)
+        && (count < 7 || items[6] is string)
+        && (count < 8 || items[7] is string)
+        && (count < 9 || items[8] is string)
+        && (count < 10 || items[9] is string)
+        && (count < 11 || items[10] is string)
+        && (count < 12 || items[11] is string)
+        && (count == 0 || items.join('\u001f').matches('^' + segment + '(\\x1f' + segment + '){' + string(count - 1) + '}$'));
+    }
+    function validExpertProfileDetails(data) {
+      return (!('avatar' in data) || (short(data.avatar,1200) && (data.avatar == '' || data.avatar.matches('^https://[^/@?# :[:space:]]+(:[0-9]+)?([/?#][^[:space:]]*)?$'))))
+        && (!('badge' in data) || short(data.badge,80))
+        && (!('experienceYears' in data) || (data.experienceYears is int && data.experienceYears >= 0 && data.experienceYears <= 70))
+        && (!('coverCrops' in data) || expertTextList(data.coverCrops,100))
+        && (!('qualifications' in data) || expertTextList(data.qualifications,200))
+        && (!('contactEmail' in data) || (short(data.contactEmail,254) && (data.contactEmail == '' || data.contactEmail.matches('^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'))))
+        && (!('zalo' in data) || data.zalo == '' || validPhone(data.zalo,30));
+    }
+    match /consultationExperts/{uid} {
+      allow read: if true;
+      allow create, update: if admin() && existsAfter(/databases/$(database)/documents/farmerApplications/$(uid))
+        && request.resource.data.keys().hasOnly(['id','name','title','organization','specialties','bio','phone','availability','active','status','internalAccount','updatedAt','updatedBy','avatar','badge','experienceYears','coverCrops','qualifications','contactEmail','zalo'])
+        && validExpertProfileDetails(request.resource.data)
+        && request.resource.data.id == uid && short(request.resource.data.name,100) && request.resource.data.name.size() > 0
+        && short(request.resource.data.title,150) && request.resource.data.title.size() > 0
+        && short(request.resource.data.organization,200) && short(request.resource.data.specialties,500) && request.resource.data.specialties.size() > 0
+        && short(request.resource.data.bio,3000) && short(request.resource.data.availability,200)
+        && (request.resource.data.phone == '' || validPhone(request.resource.data.phone,30))
+        && request.resource.data.status in ['pending','active','suspended','revoked'] && request.resource.data.internalAccount is bool
+        && request.resource.data.active == (request.resource.data.status == 'active')
+        && (request.resource.data.status != 'active' || !restrictedAccountAfter(uid))
+        && (request.resource.data.status != 'active' || (!request.resource.data.name.matches('^Chuyên gia [0-9]+$') && !request.resource.data.title.matches('.*Chờ.*') && !request.resource.data.specialties.matches('.*Chờ.*') && request.resource.data.organization.size() > 0))
+        && request.resource.data.active is bool && request.resource.data.updatedAt is number && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
+    }
+    match /consultations/{id} {
+      allow get: if account() && (!exists(/databases/$(database)/documents/consultations/$(id)) || consultationReader(resource.data));
+      allow list: if consultationReader(resource.data);
+      allow create: if farmer() && validConsultation(request.resource.data,id) && request.resource.data.farmerId == request.auth.uid
+        && validConsultationAssignee(request.resource.data) && request.resource.data.status == 'waiting'
+        && request.resource.data.revision == 1 && request.resource.data.messageCount == 1
+        && request.resource.data.lastMessageId == 'initial' && request.resource.data.lastSenderRole == 'farmer'
+        && request.resource.data.lastMessage == request.resource.data.question && request.resource.data.createdAt == request.resource.data.updatedAt
+        && getAfter(/databases/$(database)/documents/consultations/$(id)/messages/initial).data.senderId == request.auth.uid;
+      function messageUpdate() {
+        let after = request.resource.data;
+        let path = /databases/$(database)/documents/consultations/$(id)/messages/$(after.lastMessageId);
+        let message = getAfter(path).data;
+        return resource.data.status != 'closed' && !exists(path)
+          && after.diff(resource.data).affectedKeys().hasOnly(['status','revision','messageCount','lastMessage','lastMessageId','lastSenderRole','updatedAt'])
+          && after.messageCount == resource.data.messageCount + 1 && after.lastMessage == message.body
+          && after.lastSenderRole == message.senderRole && after.updatedAt == message.createdAt
+          && consultationSender(resource.data,message)
+          && after.status == (message.senderRole != 'farmer' && resource.data.status == 'waiting' ? 'in_progress' : resource.data.status);
+      }
+      function administrativeUpdate() {
+        let after = request.resource.data;
+        return admin() && after.diff(resource.data).affectedKeys().hasOnly(['status','revision','updatedAt']);
+      }
+      function participantStatusUpdate() {
+        let after = request.resource.data;
+        return (farmer() || expertActor()) && resource.data.status != 'closed'
+          && after.diff(resource.data).affectedKeys().hasOnly(['status','revision','updatedAt'])
+          && (resource.data.farmerId == request.auth.uid ? after.status == 'closed'
+            : resource.data.expertId == request.auth.uid && activeExpert(request.auth.uid) && after.status in ['in_progress','closed']);
+      }
+      allow update: if validConsultation(request.resource.data,id) && request.resource.data.revision == resource.data.revision + 1
+        && (messageUpdate() || administrativeUpdate() || participantStatusUpdate());
+      allow delete: if false;
+      match /messages/{messageId} {
+        allow read: if consultationReader(get(/databases/$(database)/documents/consultations/$(id)).data);
+        allow create: if request.resource.data.keys().hasOnly(['id','senderId','senderRole','senderName','body','createdAt'])
+          && request.resource.data.id == messageId && messageId.matches('^(initial|[A-Za-z0-9]{20})$')
+          && short(request.resource.data.senderName,100) && short(request.resource.data.body,5000) && request.resource.data.body.size() > 0
+          && request.resource.data.createdAt is number
+          && consultationSender(getAfter(/databases/$(database)/documents/consultations/$(id)).data,request.resource.data)
+          && getAfter(/databases/$(database)/documents/consultations/$(id)).data.lastMessageId == messageId
+          && getAfter(/databases/$(database)/documents/consultations/$(id)).data.lastMessage == request.resource.data.body
+          && getAfter(/databases/$(database)/documents/consultations/$(id)).data.updatedAt == request.resource.data.createdAt
+          && (exists(/databases/$(database)/documents/consultations/$(id))
+            ? get(/databases/$(database)/documents/consultations/$(id)).data.status != 'closed'
+              && getAfter(/databases/$(database)/documents/consultations/$(id)).data.messageCount == get(/databases/$(database)/documents/consultations/$(id)).data.messageCount + 1
+            : messageId == 'initial' && request.resource.data.body == getAfter(/databases/$(database)/documents/consultations/$(id)).data.question
+              && request.resource.data.senderRole == 'farmer' && getAfter(/databases/$(database)/documents/consultations/$(id)).data.messageCount == 1);
+        allow update, delete: if false;
+      }
+    }
+    function validSeasonalNotice(data,id) {
+      return data.keys().hasOnly(['id','authorId','authorName','title','body','crop','from','until','published','createdAt','updatedAt'])
+        && data.id == id && id.matches('^[A-Za-z0-9_-]{20,100}$')
+        && data.authorId == request.auth.uid && data.authorName == get(/databases/$(database)/documents/consultationExperts/$(request.auth.uid)).data.name
+        && short(data.title,150) && data.title.size() >= 3 && short(data.body,3000) && data.body.size() >= 10
+        && data.crop in ['all','lychee','orange','mandarin','pomelo','apple','longan','guava','grape']
+        && certificateDate(data.from) && certificateDate(data.until) && data.from <= data.until
+        && data.published is bool && data.createdAt is number && data.updatedAt is number;
+    }
+    match /seasonalNotices/{id} {
+      allow get: if (expertActor() && !exists(/databases/$(database)/documents/seasonalNotices/$(id)))
+        || resource.data.published == true || (account() && resource.data.authorId == request.auth.uid) || admin();
+      allow list: if resource.data.published == true || (account() && resource.data.authorId == request.auth.uid) || admin();
+      allow create: if expertActor() && validSeasonalNotice(request.resource.data,id)
+        && request.resource.data.published == true && request.resource.data.createdAt == request.resource.data.updatedAt;
+      allow update: if expertActor() && resource.data.authorId == request.auth.uid && validSeasonalNotice(request.resource.data,id)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['published','authorName','updatedAt']);
+      allow delete: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

@@ -1,0 +1,217 @@
+/* Shared type and colour scale for the storefront and working screens. */
+@theme {
+  --font-sans: 'Quicksand', Arial, 'Segoe UI', sans-serif;
+  --text-xs: .8125rem;
+  --text-xs--line-height: 1.6;
+  --text-sm: .875rem;
+  --text-sm--line-height: 1.6;
+  --text-base: 1rem;
+  --text-base--line-height: 1.65;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.4;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.35;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 1.3;
+  --color-ink: #172c39;
+  --color-body: #2c3e4a;
+  --color-muted: #465661;
+  --color-accent: #165b3c;
+  --color-action: #1d6c48;
+  --color-action-hover: #165b3c;
+  --color-inverse-muted: #e2eee8;
+  --color-line: #dce6df;
+  --radius-xl: .5rem;
+  --radius-2xl: .75rem;
+  --radius-3xl: 1rem;
+  --font-weight-extrabold: 700;
+  --font-weight-black: 700;
+  --color-slate-50: #f7f9fa;
+  --color-slate-100: #eef2f4;
+  --color-slate-200: #dfe6e8;
+  --color-slate-300: #bdcbd2;
+  --color-slate-400: #64737d;
+  --color-slate-500: #465661;
+  --color-slate-600: #3b4d59;
+  --color-slate-700: #2c3e4a;
+  --color-slate-800: #213746;
+  --color-slate-900: #172c39;
+  --color-slate-950: #10222d;
+  --color-emerald-50: #effaf4;
+  --color-emerald-100: #def9ec;
+  --color-emerald-200: #beeccf;
+  --color-emerald-300: #99e2ba;
+  --color-emerald-400: #68ce9c;
+  --color-emerald-500: #3bb77e;
+  --color-emerald-600: #1d6c48;
+  --color-emerald-700: #165b3c;
+  --color-emerald-800: #134d34;
+  --color-emerald-900: #194e39;
+  --color-emerald-950: #113c2b;
+}
+
+:root {
+  --brand: #3bb77e;
+  --brand-on: #22394a;
+  --brand-soft: #def9ec;
+  --font-body: 'Quicksand', Arial, 'Segoe UI', sans-serif;
+  --forest: var(--color-action);
+  --ink: var(--color-ink);
+  --body-text: var(--color-body);
+  --muted: var(--color-muted);
+  --accent: var(--color-accent);
+  --paper: #faf9f5;
+  --surface: #ffffff;
+  --line: #dce6df;
+  --type-caption: .8125rem;
+  --type-small: .875rem;
+  --type-body: 1rem;
+  --type-card: 1.125rem;
+  --type-panel: clamp(1.25rem, 2vw, 1.5rem);
+  --type-section: clamp(1.625rem, 2.5vw, 2rem);
+  --type-hero: clamp(2.375rem, calc(3.9vw + 2px), 3.375rem);
+  --radius-control: .5rem;
+  --radius-card: .75rem;
+  --radius-panel: 1rem;
+  --weight-body: 500;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; scroll-padding-top: 110px; }
+  body { font-size: var(--type-body); font-weight: var(--weight-body); color: var(--body-text); }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-body);
+    color: var(--heading-color, var(--ink));
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -.015em;
+    text-wrap: pretty;
+  }
+  p, li, dd { overflow-wrap: break-word; }
+  button, input, select, textarea { font-family: var(--font-body); }
+  input, select, textarea { font-size: 1rem; }
+  input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--forest); }
+  :where(*, ::before, ::after) { border-color: var(--line); }
+  strong, b { font-weight: 600; }
+  button:not(:disabled), summary, select { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+  a { text-underline-offset: 4px; }
+  img { max-width: 100%; }
+  :focus-visible { outline: 3px solid #258257; outline-offset: 4px; }
+}
+
+/* Named roles keep legacy working screens, public pages and dialogs in sync. */
+.ui-section-title { font-size: var(--type-panel); font-weight: 600; line-height: 1.4; letter-spacing: -.015em; }
+.ui-card-title { font-size: var(--type-card); font-weight: 600; line-height: 1.5; letter-spacing: -.01em; }
+.ui-label-title { font-size: var(--type-body); font-weight: 600; line-height: 1.5; letter-spacing: 0; }
+.ui-caption-title { font-size: var(--type-small); font-weight: 600; line-height: 1.6; letter-spacing: 0; }
+.ui-banner { --heading-color: #fff; background: var(--forest); color: #fff; border-color: var(--accent); box-shadow: none; }
+.ui-button-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  min-height: 44px;
+  padding: .625rem 1rem;
+  border-radius: var(--radius-control);
+  background: var(--forest);
+  color: #fff;
+  font-size: var(--type-small);
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+  transition: background .2s;
+}
+.ui-button-primary:hover:not(:disabled) { background: var(--accent); }
+.ui-button-primary:disabled { opacity: .5; }
+:where(.workspace-main, .ui-dialog, .trace-page) button {
+  min-height: 44px;
+  font-size: var(--type-small);
+  font-weight: 600;
+  line-height: 1.5;
+}
+:where(.workspace-main, .ui-dialog, .trace-page) label { font-size: var(--type-small); line-height: 1.6; }
+:where(.site-app, .ui-dialog, .trace-page) :is(input, select, textarea):not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="hidden"]) {
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: var(--type-body);
+  font-weight: var(--weight-body);
+  line-height: 1.5;
+  color: var(--ink);
+  border-color: var(--line);
+}
+:where(.workspace-main, .ui-dialog, .trace-page) :is(input, select):not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="hidden"]) { min-height: 44px; }
+:where(.workspace-main, .ui-dialog, .trace-page) textarea { min-height: 100px; }
+.ui-dialog :is(button[aria-label], button:has(>svg:only-child)) { min-width: 44px; flex-shrink: 0; }
+.ui-dialog :is(button[aria-label], button:has(>svg:only-child))>svg:only-child { margin-inline: auto; }
+.workspace-main { color: var(--body-text); }
+.workspace-main>*, .workspace-main :is(.flex, .grid)>* { min-width: 0; }
+
+.ui-dialog { background-color: color-mix(in srgb, var(--accent) 58%, transparent); color: var(--body-text); font: var(--weight-body) var(--type-body)/1.65 var(--font-body); }
+.ui-dialog :is(button,a) { line-height: 1.5; }
+.ui-dialog .ui-banner button:focus-visible { outline-color: white; }
+.cart-line { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: 12px; }
+.cart-line img { flex-shrink: 0; }
+.cart-line-controls { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cart-line-controls button { border: 1px solid var(--line); border-radius: var(--radius-control); color: var(--accent); }
+.cart-line-controls button:last-child { margin-left: auto; color: #9f1239; }
+.ui-dialog .dialog-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px 12px; padding: 12px 24px 0; }
+.ui-dialog .dialog-tabs button { white-space: normal; text-align: left; font-size: var(--type-small); align-items: flex-start; }
+.ui-dialog .dialog-tabs button svg { flex-shrink: 0; margin-top: 2px; }
+.ui-dialog .product-price-panel { flex-wrap: wrap; gap: 16px; }
+.ui-dialog .product-shortcuts { grid-template-columns: 1fr; }
+.ui-dialog .product-shortcuts p { overflow: visible; white-space: normal; max-width: none; }
+.ui-dialog .product-checkout { flex-wrap: wrap; gap: 12px; }
+.ui-dialog .product-checkout>button { min-height: 48px; }
+.farmer-summary :is(h3,p) { color: #fff; }
+.farmer-summary .farmer-phone { background: var(--brand-soft); color: var(--accent); }
+.farmer-story { font-size: var(--type-small); line-height: 1.75; }
+.farmer-story h4 { color: var(--ink); font-size: 1rem; font-weight: 600; letter-spacing: 0; }
+.farmer-story p { font-style: normal; }
+.certificate-card { background: #f2faf6; border-color: var(--line); font-size: var(--type-small); line-height: 1.7; }
+.certificate-card h5 { font-size: 1rem; font-weight: 600; }
+.trace-page { background: var(--paper); color: var(--body-text); font-family: var(--font-body); }
+.trace-page .trace-brand { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.trace-page h1 { color: var(--ink); font-family: var(--font-body); font-size: clamp(1.5rem,3vw,2rem); line-height: 1.4; }
+.trace-page>header { border: 1px solid var(--line); }
+.trace-page>header>p { color: var(--body-text); font-size: var(--type-small); }
+.trace-page>header>p:first-child { font-size: var(--type-small); font-weight: 600; color: var(--forest); }
+.trace-page .farmer-story h4 { font-size: 1rem; }
+
+@media(min-width:640px) {
+  .ui-dialog .product-shortcuts { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+@media(max-width:760px) {
+  :root {
+    --type-caption: .75rem;
+    --type-small: .8125rem;
+    --type-body: .9375rem;
+    --type-card: 1.0625rem;
+    --type-panel: clamp(1.125rem, 3vw, 1.375rem);
+    --type-section: clamp(1.375rem, 4vw, 1.625rem);
+    --type-hero: clamp(1.75rem, 7.7vw, 2.125rem);
+    --text-xs: .75rem;
+    --text-sm: .8125rem;
+    --text-base: .9375rem;
+    --text-lg: 1.0625rem;
+    --text-xl: 1.125rem;
+    --text-2xl: 1.375rem;
+    --text-3xl: 1.625rem;
+  }
+  /* Keep form text readable without triggering automatic zoom on iPhones. */
+  :is(.site-app, .ui-dialog, .trace-page) :is(input, select, textarea):not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="hidden"]) { font-size: 1rem; }
+}
+@media(max-width:540px) {
+  .ui-dialog .dialog-tabs { padding-inline: 16px; gap: 4px 8px; }
+  .ui-dialog .product-checkout>button { flex-basis: 100%; }
+  .ui-dialog .product-price-panel>div:last-child { text-align: left; }
+  .farmer-summary .farmer-contact { flex-direction: column; }
+}
+@media(prefers-reduced-motion:reduce) {
+  html { scroll-behavior: auto; }
+  *,*::before,*::after { animation: none!important; transition: none!important; }
+}

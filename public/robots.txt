@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Sitemap: https://trai-ngot-bac-ninh.web.app/sitemap.xml

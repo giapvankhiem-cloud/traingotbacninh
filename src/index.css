@@ -1,0 +1,76 @@
+@import "./fonts.css";
+@import "tailwindcss";
+@import "./styles/design-system.css";
+@import "./styles/storefront.css";
+@import "./styles/expert-directory.css";
+@import "./styles/expert-profile.css";
+@import "./styles/consultation-chat.css";
+@import "./styles/community.css";
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--paper);
+    color: var(--body-text);
+    line-height: 1.65;
+  }
+
+  button,
+  input,
+  optgroup,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #68ce9c;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #258257;
+}
+
+/* ============ ANIMATIONS ============ */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ============ SHADOW SYSTEM ============ */
+
+.shadow-card {
+  box-shadow:
+    0 4px 20px -2px rgba(9, 65, 41, 0.07),
+    0 2px 6px -1px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+/* Input focus ring */
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--forest);
+  outline-offset: 1px;
+}

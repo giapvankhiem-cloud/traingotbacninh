@@ -1,0 +1,9 @@
+node_modules
+.git
+.tools
+.firebase
+.aistudio
+dist
+.env*
+*.log
+**/*.docx

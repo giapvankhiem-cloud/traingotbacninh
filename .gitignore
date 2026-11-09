@@ -1,0 +1,16 @@
+node_modules/
+build/
+dist/
+coverage/
+.tools/
+.firebase/
+.aistudio/
+/DANH SÁCH TÀI KHOẢN.docx
+/Tài khoản demo.docx
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.DS_Store
+*.log
+.env*
+!.env.example
