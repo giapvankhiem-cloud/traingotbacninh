@@ -50,7 +50,7 @@ export function HeroSlideshow() {
           <img key={slide.src} className={index === active ? 'hero-slide is-active' : 'hero-slide'} src={slide.src.startsWith('file:') ? (index === 0 ? publicAssetUrl('images/lychee-season.jpg') : undefined) : slide.src} width="1000" height="663" alt={index === active ? slide.alt : ''} aria-hidden={index !== active} fetchPriority={index === 0 ? 'high' : 'auto'} loading={index === 0 ? 'eager' : 'lazy'} decoding="async" />
         ))}
       </div>
-      <figcaption className="hero-photo-label"><span>HƯƠNG VỊ TỪ VÙNG TRỒNG</span><strong>Theo mùa thu hoạch<br />Gần hơn với người trồng.</strong></figcaption>
+      <figcaption className="hero-photo-label"><span>HƯƠNG VỊ TỪ NÚI ĐỒI</span><strong>Theo mùa thu hoạch<br />Gần hơn với người trồng.</strong></figcaption>
       <span className="photo-note">{slides[active].label} · {active + 1}/{slides.length}</span>
       <div className="hero-slide-controls" aria-label="Điều khiển ảnh trái cây">
         {slides.map((slide, index) => (
