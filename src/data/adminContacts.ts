@@ -6,7 +6,7 @@ export interface AdminContact {
 
 // Only list phone numbers approved for public display.
 export const adminContacts: readonly AdminContact[] = [
-  { nam: 'Giáp Khiêm', role: 'Quản trị ', phone: '0975052302' },
+  { name: 'Giáp Khiêm', role: 'Quản trị ', phone: '0975052302' },
   { name: 'Lương Thị Khánh Chi', role: 'Hỗ trợ đăng ký tài khoản', phone: '0344210019' },
   { name: 'Trần Quang Duy', role: 'Hỗ trợ kỹ thuật', phone: '0347858829' },
 ];
