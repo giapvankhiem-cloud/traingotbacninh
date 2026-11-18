@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
 export default defineConfig(({ command }) => ({
   // GitHub Pages uses /traingotbacninh/. Other static hosts can override this
   // at build time with VITE_BASE_PATH=/your-site/.
-  base: command === 'build' ? process.env.VITE_BASE_PATH || '/traingotbacninh/' : '/',
+  base: command === 'build' ? process.env.VITE_BASE_PATH || '/' : '/',
   plugins: [react(), tailwindcss()],
   optimizeDeps: {
     include: ['qrcode'],
